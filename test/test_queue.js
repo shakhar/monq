@@ -101,10 +101,86 @@ describe('Queue', function () {
             assert.equal(job.data.status, 'dequeued');
         });
 
-        it('does not dequeue delayed job', function () {
+        it('does not dequeue delayed job', function (done) {
             queue.dequeue(function (err, j) {
                 assert.equal(err, undefined);
                 assert.equal(j, undefined);
+                done()
+            });
+        });
+    });
+
+    describe('dequeue with query', function () {
+        var job;
+
+        beforeEach(function (done) {
+            query = { '$or': [
+                { 'params.bar': { $ne: 'baz' } }, 
+                { 'params.bar': 'baz', 'priority': { $gte: 2 } }] }
+
+            queue.enqueue('foo1', { bar: 'baz' }, { priority: 2, query: query }, function (err) {
+                if (err) return done(err);
+
+                queue.dequeue(done);
+            });
+        });
+
+        describe("when job unmatches dequeued job's query", function() {
+            beforeEach(function (done) {
+                queue.enqueue('foo2', { bar: 'baz' }, { priority: 1 }, function(err) {
+                    if (err) return done(err);
+
+                    queue.dequeue(function (err, j) {
+                        if (err) return done(err);
+
+                        job = j
+                        done()
+                    });
+                });
+            });
+
+            it("does not dequeue job", function () {
+                assert.equal(job, undefined);
+            });
+        });
+
+        describe("when job matches first part of dequeued job's query", function() {
+            beforeEach(function (done) {
+                queue.enqueue('foo2', { bar: 'baz2' }, { priority: 1 }, function(err) {
+                    if (err) return done(err);
+
+                    queue.dequeue(function (err, j) {
+                        if (err) return done(err);
+
+                        job = j
+                        done()
+                    });
+                });
+            });
+
+            it("does dequeue job", function () {
+                assert.ok(job);
+                assert.equal(job.data.name, "foo2");
+            });
+        });
+
+        describe("when job matches second part of dequeued job's query", function() {
+            beforeEach(function (done) {
+                queue.enqueue('foo2', { bar: 'baz' }, { priority: 2 }, function(err) {
+                    if (err) return done(err);
+
+                    queue.dequeue(function (err, j) {
+                        if (err) return done(err);
+
+                        job = j
+                        done()
+                    });
+                });
+            });
+
+            it("does dequeue job", function () {
+                assert.ok(job);
+                assert.equal(job.data.name, "foo2");
             });
         });
     });

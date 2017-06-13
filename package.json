@@ -8,13 +8,14 @@
   "main": "./lib/index",
   "scripts": {
     "test": "./node_modules/.bin/mocha",
-    "jsdoc2md" : "jsdoc2md lib/*.js > API.md"
+    "jsdoc2md": "jsdoc2md lib/*.js > API.md"
   },
   "repository": {
     "type": "git",
     "url": "git://github.com/scttnlsn/monq.git"
   },
   "dependencies": {
+    "lodash": "^4.17.4",
     "mongojs": "^2.1.0"
   },
   "devDependencies": {
