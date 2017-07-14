@@ -34,6 +34,7 @@ describe('Worker', function () {
     after(function(done) {
         redisClient.quit(done);
     });
+
     it('has default polling interval', function () {
         assert.equal(worker.interval, 5000);
     });
@@ -67,6 +68,64 @@ describe('Worker', function () {
         });
     });
 
+    describe('when starting', function() {
+        beforeEach(function() {
+            worker.poll = function() {}
+        });
+
+        describe('when job already dequeued', function() {
+            beforeEach(function (done) {
+                async.series([
+                    function(next) { worker.start(next); },
+                    function(next) { worker.queues[0].enqueue('foo', {}, next); },
+                    function(next) { worker.queues[0].dequeue(next); },
+                    function(next) {
+                        worker.queues[0].collection.find({ status: "dequeued" }, function(err, docs){        
+                            assert.equal(docs[0].name, 'foo');
+                            worker.stop();
+                            next();
+                        });
+                    },
+                    function(next) { worker.start(next); }
+                ], done);
+            });
+
+            it('returns dequeued job to queue', function (done) {
+                worker.queues[0].collection.find({ status: "queued" }, function(err, docs){
+                    assert.equal(docs[0].name, 'foo');
+                    done()
+                });
+            });
+        });
+
+        describe('when job from foreign queue already dequeued', function() {
+            beforeEach(function (done) {
+                foreignQueue = new Queue({ db: helpers.db }, 'foreign');
+
+                async.series([
+                    function(next) { worker.start(next); },
+                    function(next) { foreignQueue.enqueue('foo', {}, next); },
+                    function(next) { foreignQueue.dequeue(next); },
+                    function(next) {
+                        foreignQueue.collection.find({ status: "dequeued" }, function(err, docs){
+                            assert.equal(docs[0].name, 'foo');
+                            worker.stop();
+                            next();
+                        });
+                    },
+                    function(next) { worker.start(next); }
+                ], done);
+            });
+
+            it('does not return dequeued job to queue', function (done) {
+                foreignQueue.collection.find({ status: "queued" }, function(err, docs){
+                    assert.equal(docs[0], undefined);
+                    done()
+                });
+            });
+        });
+    });
+
     describe('when polling', function () {
         describe('when error', function () {
             it('emits an `error` event', function (done) {
@@ -92,11 +151,12 @@ describe('Worker', function () {
                 sinon.stub(worker.queues[0], 'dequeue').yields(null, job);
             });
 
-            it('works on the job', function () {
-                worker.start();
-
-                assert.ok(work.calledOnce);
-                assert.equal(work.getCall(0).args[0], job);
+            it('works on the job', function (done) {
+                worker.start(function(){
+                    assert.ok(work.calledOnce);
+                    assert.equal(work.getCall(0).args[0], job);
+                    done()
+                });
             });
 
             it('emits `dequeued` event', function (done) {
@@ -124,21 +184,22 @@ describe('Worker', function () {
                 clock.restore();
             });
 
-            it('waits an interval before polling again', function () {
-                worker.start();
+            it('waits an interval before polling again', function (done) {
+                worker.start(function(){
+                    var poll = sinon.spy(worker, 'poll');
+                    clock.tick(worker.interval);
+                    worker.stop();
 
-                var poll = sinon.spy(worker, 'poll');
-                clock.tick(worker.interval);
-                worker.stop();
-
-                assert.ok(poll.calledOnce);
+                    assert.ok(poll.calledOnce);
+                    done()
+                });
             });
         });
 
         describe('when stopping with a job in progress', function () {
             var dequeueStubs;
 
-            beforeEach(function () {
+            beforeEach(function (done) {
                 dequeueStubs = worker.queues.map(function (queue) {
                     return sinon.stub(queue, 'dequeue').yieldsAsync(null, job);
                 });
@@ -146,8 +207,10 @@ describe('Worker', function () {
                 sinon.stub(worker, 'process').yields(null, 'foobar');
                 sinon.stub(job, 'complete').yields();
 
-                worker.start();
-                worker.work(job);
+                worker.start(function(){
+                    worker.work(job);
+                    done()
+                });
             });
 
             it('waits for the job to finish', function (done) {
@@ -172,12 +235,12 @@ describe('Worker', function () {
         describe('when stopping during an empty dequeue', function () {
             var dequeueStubs;
 
-            beforeEach(function () {
+            beforeEach(function (done) {
                 dequeueStubs = worker.queues.map(function (queue) {
                     return sinon.stub(queue, 'dequeue').yieldsAsync(null, null);
                 });
 
-                worker.start();
+                worker.start(done);
             });
 
             it('stops cleanly', function (done) {
@@ -200,12 +263,12 @@ describe('Worker', function () {
         describe('when stopping between polls', function () {
             var dequeueStubs;
 
-            beforeEach(function () {
+            beforeEach(function (done) {
                 dequeueStubs = worker.queues.map(function (queue) {
                     return sinon.stub(queue, 'dequeue').yieldsAsync(null, null);
                 });
 
-                worker.start();
+                worker.start(done);
             });
 
             it('stops cleanly', function (done) {
@@ -230,12 +293,12 @@ describe('Worker', function () {
         describe('when stopping twice', function () {
             var dequeueStubs;
 
-            beforeEach(function () {
+            beforeEach(function (done) {
                 dequeueStubs = worker.queues.map(function (queue) {
                     return sinon.stub(queue, 'dequeue').yieldsAsync(null, null);
                 });
 
-                worker.start();
+                worker.start(done);
             });
 
             it('does not error', function (done) {
