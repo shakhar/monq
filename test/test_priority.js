@@ -1,10 +1,13 @@
 var assert = require('assert');
 var async = require('async');
 var sinon = require('sinon');
+var async = require('async');
 var helpers = require('./helpers');
 var Queue = require('../lib/queue');
 var Worker = require('../lib/worker');
 var jobs = require('./fixtures/priority_jobs');
+
+var redisClient = require("redis").createClient()
 
 describe('Priority', function () {
     var handler, queue, worker;
@@ -17,8 +20,15 @@ describe('Priority', function () {
         });
     });
 
-    afterEach(function (done) {
-        queue.collection.remove({}, done);
+     afterEach(function(done) {
+        async.parallel([
+            function(next) { redisClient.flushdb(next); },
+            function(next) { queue.collection.remove({}, next); },
+        ], done);
+    });
+
+    after(function(done) {
+        redisClient.quit(done);
     });
 
     describe('worker with no minimum priority', function () {

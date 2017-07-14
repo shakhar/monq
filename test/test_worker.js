@@ -1,6 +1,11 @@
 var assert = require('assert');
+var async = require('async');
 var sinon = require('sinon');
+var helpers = require('./helpers');
+var Queue = require('../lib/queue');
 var Worker = require('../lib/worker');
+
+var redisClient = require("redis").createClient()
 
 describe('Worker', function () {
     var job, queues, worker;
@@ -13,15 +18,22 @@ describe('Worker', function () {
         };
 
         queues = ['foo', 'bar', 'baz'].map(function (name) {
-            return {
-                enqueue: function () {},
-                dequeue: function () {}
-            };
+            return new Queue({ db: helpers.db }, name);
         });
 
         worker = new Worker(queues);
     });
 
+    afterEach(function(done) {
+        async.parallel([
+            function(next) { redisClient.flushdb(next); },
+            function(next) { queues[0].collection.remove({}, next); },
+        ], done);
+    });
+
+    after(function(done) {
+        redisClient.quit(done);
+    });
     it('has default polling interval', function () {
         assert.equal(worker.interval, 5000);
     });

@@ -1,6 +1,9 @@
 var assert = require('assert');
+var async = require('async');
 var helpers = require('./helpers');
 var Queue = require('../lib/queue');
+
+var redisClient = require("redis").createClient()
 
 describe('Queue', function () {
     var queue;
@@ -9,8 +12,15 @@ describe('Queue', function () {
         queue = new Queue({ db: helpers.db });
     });
 
-    afterEach(function (done) {
-        queue.collection.remove({}, done);
+    afterEach(function(done) {
+        async.parallel([
+            function(next) { redisClient.flushdb(next); },
+            function(next) { queue.collection.remove({}, next); },
+        ], done);
+    });
+
+    after(function(done) {
+        redisClient.quit(done);
     });
 
     describe('enqueue', function () {

@@ -1,8 +1,11 @@
 var assert = require('assert');
+var async = require('async');
 var helpers = require('./helpers');
 var Queue = require('../lib/queue');
 var sinon = require('sinon');
 var Worker = require('../lib/worker');
+
+var redisClient = require("redis").createClient()
 
 describe('Timeout', function () {
     var queue, handler, worker, failed;
@@ -21,8 +24,15 @@ describe('Timeout', function () {
         worker.on('failed', failed);
     });
 
-    afterEach(function (done) {
-        queue.collection.remove({}, done);
+    afterEach(function(done) {
+        async.parallel([
+            function(next) { redisClient.flushdb(next); },
+            function(next) { queue.collection.remove({}, next); },
+        ], done);
+    });
+
+    after(function(done) {
+        redisClient.quit(done);
     });
 
     describe('worker processing job with a timeout', function () {

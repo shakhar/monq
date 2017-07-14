@@ -1,9 +1,12 @@
 var assert = require('assert');
+var async = require('async');
 var sinon = require('sinon');
 var helpers = require('./helpers');
 var Job = require('../lib/job');
 var Queue = require('../lib/queue');
 var Worker = require('../lib/worker');
+
+var redisClient = require("redis").createClient()
 
 describe('Retries', function () {
     var queue, handler, worker, failed;
@@ -22,8 +25,16 @@ describe('Retries', function () {
         worker.on('failed', failed);
     });
 
-    afterEach(function (done) {
-        queue.collection.remove({}, done);
+
+    afterEach(function(done) {
+        async.parallel([
+            function(next) { redisClient.flushdb(next); },
+            function(next) { queue.collection.remove({}, next); },
+        ], done);
+    });
+
+    after(function(done) {
+        redisClient.quit(done);
     });
 
     describe('worker retrying job', function () {
