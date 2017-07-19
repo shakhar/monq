@@ -79,9 +79,24 @@ class Queue
         query["$and"] = queries unless _.isEmpty(queries)
 
         sort = { priority: -1, _id: 1 }
+
+        @collection.find query, {}, { sort, limit: 1 }, (err, jobs) ->
+          next(err, jobs?[0])
+
+      ([job]..., next) ->
+        lockCallback = options.lockCallbacks?[job?.name]
+
+        return next(null, job) unless job? && lockCallback?
+
+        lockCallback job, _.partial(next, _, job)
+
+      ([job]..., next) =>
+        return next() unless job?
+
+        query = { _id: job._id }
         update = { $set: { status: "dequeued", dequeued: new Date() } }
 
-        @collection.findAndModify { query, sort, update, new: true }, next
+        @collection.findAndModify { query, update, new: true }, next
 
     ], (error, doc) =>
       # Release lock even when an error occurs

@@ -38,6 +38,21 @@ worker.register
 worker.start()
 ```
 
+Create workers' lock functions to dequeue only unlocked jobs.  The functions responsible for performing a job must be registered with each worker: (The `registerLock` callbacks should return an error when lock exists)
+
+```javascript
+worker = Client.worker ["example"]
+
+worker.register
+  reverse: (params, callback) -> ...
+
+worker.registerLock
+  reverse: (job, callback) -> ...
+
+worker.start()
+```
+
+
 Events
 ------
 

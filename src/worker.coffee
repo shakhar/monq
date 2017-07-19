@@ -11,6 +11,7 @@ class Worker extends Events.EventEmitter
 
     @interval = options.interval ? 5000
     @callbacks = options.callbacks ? {}
+    @lockCallbacks = options.lockCallbacks ? {}
     @strategies = options.strategies ? {}
     @universal = options.universal ? false
 
@@ -24,6 +25,10 @@ class Worker extends Events.EventEmitter
   register: (callbacks) ->
     _.forEach callbacks, (callback, name) =>
       @callbacks[name] = callback
+
+  registerLock: (lockCallbacks) ->
+    _.forEach lockCallbacks, (lockCallback, name) =>
+      @lockCallbacks[name] = lockCallback
 
   strategies: (strategies) ->
     _.forEach strategies, (strategy, name) =>
@@ -79,8 +84,13 @@ class Worker extends Events.EventEmitter
 
   dequeue: (callback) ->
     queue = @queues.shift()
-    @queues.push(queue)
-    queue.dequeue { minPriority: @minPriority, callbacks: @callbacks }, callback
+    @queues.push queue
+
+    queue.dequeue
+      minPriority: @minPriority
+      callbacks: @callbacks
+      lockCallbacks: @lockCallbacks
+    , callback
 
   work: (job) ->
     finished = false

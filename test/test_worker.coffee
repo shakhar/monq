@@ -338,3 +338,51 @@ describe "Worker", ->
       worker.process { name: "asdf" }, (err) ->
         expect(err).to.exist
         done()
+
+  describe "when locking", ->
+    beforeEach (done) ->
+      locked = true
+
+      queue = new Queue { db: Helpers.db }, "foo"
+      worker = new Worker [queue]
+
+      worker.register
+        example: (params, callback) -> callback(null, params)
+
+      worker.registerLock
+        example: (job, callback) ->
+          return callback() unless locked
+          locked = false
+          callback new Error("locked")
+
+      worker.poll = ->
+
+      Async.series [
+        (next) -> worker.start next
+        (next) -> worker.queues[0].enqueue "example", {}, next
+      ], done
+
+    it "passes job to registered callback", (done) ->
+      Async.series [
+        (next) ->
+          worker.dequeue (err) ->
+            expect(err).to.exist
+            expect(err.message).to.equal "locked"
+            next()
+        (next) ->
+          worker.queues[0].collection.find (err, docs) ->
+            expect(err).to.not.exist
+            expect(docs[0].name).to.equal "example"
+            expect(docs[0].status).to.equal "queued"
+            next()
+        (next) ->
+          worker.dequeue (err) ->
+            expect(err).to.not.exist
+            next()
+        (next) ->
+          worker.queues[0].collection.find (err, docs) ->
+            expect(err).to.not.exist
+            expect(docs[0].name).to.equal "example"
+            expect(docs[0].status).to.equal "dequeued"
+            next()
+      ], done
