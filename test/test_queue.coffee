@@ -1,26 +1,34 @@
 Async = require "async"
 
-Helpers = require "./helpers"
 Queue = require "../src/queue"
 
-redisClient = require("redis").createClient()
+MongoClient = require("mongodb").MongoClient
+RedisClient = require("redis").createClient()
 
 { expect } = require "chai"
+
+uri = "mongodb://localhost:27017/monq_tests"
 
 describe "Queue", ->
   job = queue = undefined
 
+  before (done) ->
+    MongoClient.connect uri, (err, @db) => done(err)
+
+  after (done) ->
+    @db.close done
+
   beforeEach ->
-    queue = new Queue { db: Helpers.db }
+    queue = new Queue { db: @db }
 
   afterEach (done) ->
     Async.parallel [
-      (next) -> redisClient.flushdb next
+      (next) -> RedisClient.flushdb next
       (next) -> queue.collection.remove {}, next
     ], done
 
   after (done) ->
-    redisClient.quit done
+    RedisClient.quit done
 
   describe "enqueue", ->
     beforeEach (done) ->

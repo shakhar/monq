@@ -1,7 +1,8 @@
 _ = require "lodash"
 Async = require "async"
 Mewtwo = require "mewtwo"
-Mongo = require "mongojs"
+
+ObjectID = require("mongodb").ObjectID
 
 Db = require "./db"
 Job = require "./job"
@@ -32,7 +33,7 @@ class Queue
     new Job @collection, data
 
   get: (id, callback) ->
-    id = new Mongo.ObjectID(id) if _.isString(id)
+    id = new ObjectID(id) if _.isString(id)
 
     query = { _id: id }
     query.queue = @name unless @options.universal
@@ -80,8 +81,7 @@ class Queue
 
         sort = { priority: -1, _id: 1 }
 
-        @collection.find query, {}, { sort, limit: 1 }, (err, jobs) ->
-          next(err, jobs?[0])
+        @collection.findOne query, { sort }, next
 
       ([job]..., next) ->
         lockCallback = options.lockCallbacks?[job?.name]
@@ -96,22 +96,22 @@ class Queue
         query = { _id: job._id }
         update = { $set: { status: "dequeued", dequeued: new Date() } }
 
-        @collection.findAndModify { query, update, new: true }, next
+        @collection.findAndModify query, [], update, { new: true }, next
 
     ], (error, doc) =>
       # Release lock even when an error occurs
       @mewtwo.release dequeueLock, (err = error) =>
         return callback(err) if err?
         return callback() unless doc?
-        callback err, @job(doc)
+        callback err, @job(doc.value)
 
   _getDequeuedJobsQueries: (callback) ->
     query = { status: "dequeued" }
     projection = { query: 1 }
     sort = { priority: -1 }
-    options = { sort }
+    options = { projection, sort }
 
-    @collection.find query, projection, options, (err, jobs) ->
+    @collection.find(query, options).toArray (err, jobs) ->
       return callback(err) if err?
       return callback(null, []) if _.isEmpty(jobs)
 

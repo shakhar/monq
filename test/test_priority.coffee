@@ -5,26 +5,36 @@ Helpers = require "./helpers"
 Queue = require "../src/queue"
 Worker = require "../src/worker"
 
+MongoClient = require("mongodb").MongoClient
+RedisClient = require("redis").createClient()
+
 jobs = require("./fixtures/priority_jobs")
-redisClient = require("redis").createClient()
 
 { expect } = require "chai"
+
+uri = "mongodb://localhost:27017/monq_tests"
 
 describe "Priority", ->
   handler = queue = worker = undefined
 
+  before (done) ->
+    MongoClient.connect uri, (err, @db) => done(err)
+
+  after (done) ->
+    @db.close done
+
   beforeEach ->
-    queue = new Queue { db: Helpers.db }
+    queue = new Queue { db: @db }
     handler = Sinon.spy (params, callback) -> callback()
 
   afterEach (done) ->
     Async.parallel [
-      (next) -> redisClient.flushdb next
+      (next) -> RedisClient.flushdb next
       (next) -> queue.collection.remove {}, next
     ], done
 
   after (done) ->
-    redisClient.quit done
+    RedisClient.quit done
 
   describe "worker with no minimum priority", ->
     beforeEach (done) ->

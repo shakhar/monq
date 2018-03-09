@@ -1,12 +1,15 @@
 _ = require "lodash"
-Mongo = require "mongojs"
+Deasync = require "deasync"
 
 Queue = require "./queue"
 Worker = require "./worker"
 
+MongoClient = require("mongodb").MongoClient
+
 class Connection
-  constructor: (uri, options) ->
-    @db = Mongo(uri, [], options)
+  constructor: (uri, options = {}) ->
+    connect = Deasync(MongoClient.connect)
+    @db = connect(uri, options)
 
   worker: (queues, options = {}) ->
     collection = options.collection ? "jobs"
@@ -18,7 +21,7 @@ class Connection
 
     queues = [queues] unless _.isArray(queues)
 
-    queues = queues.map (queue) ->
+    queues = queues.map (queue) =>
       if _.isString(queue)
         queue = @queue queue, { collection }
         

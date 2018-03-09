@@ -1,16 +1,24 @@
-Helpers = require "./helpers"
 Job = require "../src/job"
+MongoClient = require("mongodb").MongoClient
 
 { expect } = require "chai"
+
+uri = "mongodb://localhost:27017/monq_tests"
 
 describe "Job", ->
   job = undefined
 
+  before (done) ->
+    MongoClient.connect uri, (err, @db) => done(err)
+
+  after (done) ->
+    @db.close done
+
   beforeEach ->
-    @collection = Helpers.db.collection("jobs")
+    @collection = @db.collection("jobs")
 
   afterEach (done) ->
-    @collection.remove {}, done
+    @collection.remove {}, {}, done
 
   it "has data object", ->
     job = new Job(@collection, { foo: "bar" })

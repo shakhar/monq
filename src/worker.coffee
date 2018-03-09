@@ -45,7 +45,7 @@ class Worker extends Events.EventEmitter
       callback?(err)
 
   stop: (callback = ->) ->
-    callback() unless @working
+    return callback() unless @working
 
     @working = false
 

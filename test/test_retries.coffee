@@ -6,15 +6,24 @@ Job = require "../src/job"
 Queue = require "../src/queue"
 Worker = require "../src/worker"
 
-redisClient = require("redis").createClient()
+MongoClient = require("mongodb").MongoClient
+RedisClient = require("redis").createClient()
 
 { expect } = require "chai"
+
+uri = "mongodb://localhost:27017/monq_tests"
 
 describe "Retries", ->
   queue = handler = worker = failed = undefined
 
+  before (done) ->
+    MongoClient.connect uri, (err, @db) => done(err)
+
+  after (done) ->
+    @db.close done
+
   beforeEach ->
-    queue = new Queue { db: Helpers.db }
+    queue = new Queue { db: @db }
 
     handler = Sinon.spy (params, callback) -> callback(new Error())
     failed = Sinon.spy()
@@ -25,12 +34,12 @@ describe "Retries", ->
 
   afterEach (done) ->
     Async.parallel [
-      (next) -> redisClient.flushdb next
+      (next) -> RedisClient.flushdb next
       (next) -> queue.collection.remove {}, next
     ], done
 
   after (done) ->
-    redisClient.quit done
+    RedisClient.quit done
 
   describe "worker retrying job", ->
     beforeEach (done) ->

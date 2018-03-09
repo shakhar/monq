@@ -1,16 +1,24 @@
 Async = require "async"
 Sinon = require "sinon"
 
-Helpers = require "./helpers"
 Queue = require "../src/queue"
 Worker = require "../src/worker"
 
-redisClient = require("redis").createClient()
+MongoClient = require("mongodb").MongoClient
+RedisClient = require("redis").createClient()
 
 { expect } = require "chai"
 
+uri = "mongodb://localhost:27017/monq_tests"
+
 describe "Worker", ->
   job = queues = worker = undefined
+
+  before (done) ->
+    MongoClient.connect uri, (err, @db) => done(err)
+
+  after (done) ->
+    @db.close done
 
   beforeEach ->
     job = 
@@ -18,19 +26,19 @@ describe "Worker", ->
       complete: ->
       fail: ->
 
-    queues = ["foo", "bar", "baz"].map (name) ->
-      new Queue { db: Helpers.db }, name
+    queues = ["foo", "bar", "baz"].map (name) =>
+      new Queue { db: @db }, name
 
     worker = new Worker queues
 
   afterEach (done) ->
     Async.parallel [
-      (next) -> redisClient.flushdb next
+      (next) -> RedisClient.flushdb next
       (next) -> queues[0].collection.remove {}, next
     ], done
 
   after (done) ->
-    redisClient.quit done
+    RedisClient.quit done
 
   it "has default polling interval", ->
     expect(worker.interval).to.equal 5000
@@ -74,34 +82,34 @@ describe "Worker", ->
           (next) -> worker.queues[0].enqueue "foo", {}, next
           (next) -> worker.queues[0].dequeue next
           (next) ->
-            worker.queues[0].collection.find { status: "dequeued" }, (err, docs) ->
+            worker.queues[0].collection.findOne { status: "dequeued" }, (err, doc) ->
               expect(err).to.not.exist
-              expect(docs[0].name).to.equal "foo"
+              expect(doc.name).to.equal "foo"
               worker.stop()
               next()
           (next) -> worker.start next
         ], done
 
       it "returns dequeued job to queue", (done) ->
-        worker.queues[0].collection.find { status: "queued" }, (err, docs) ->
+        worker.queues[0].collection.findOne { status: "queued" }, (err, doc) ->
           expect(err).to.not.exist
-          expect(docs[0].name).to.equal "foo"
+          expect(doc.name).to.equal "foo"
           done()
 
     describe "when job from foreign queue already dequeued", ->
       foreignQueue  = undefined
 
       beforeEach (done) ->
-        foreignQueue = new Queue { db: Helpers.db }, "foreign"
+        foreignQueue = new Queue { db: @db }, "foreign"
 
         Async.series [
           (next) -> worker.start next
           (next) -> foreignQueue.enqueue "foo", {}, next
           (next) -> foreignQueue.dequeue next
           (next) ->
-            foreignQueue.collection.find { status: "dequeued" }, (err, docs) ->
+            foreignQueue.collection.findOne { status: "dequeued" }, (err, doc) ->
               expect(err).to.not.exist
-              expect(docs[0].name).to.equal "foo"
+              expect(doc.name).to.equal "foo"
               worker.stop()
               next()
           (next) -> worker.start next
@@ -343,7 +351,7 @@ describe "Worker", ->
     beforeEach (done) ->
       locked = true
 
-      queue = new Queue { db: Helpers.db }, "foo"
+      queue = new Queue { db: @db }, "foo"
       worker = new Worker [queue]
 
       worker.register
@@ -370,19 +378,19 @@ describe "Worker", ->
             expect(err.message).to.equal "locked"
             next()
         (next) ->
-          worker.queues[0].collection.find (err, docs) ->
+          worker.queues[0].collection.findOne (err, doc) ->
             expect(err).to.not.exist
-            expect(docs[0].name).to.equal "example"
-            expect(docs[0].status).to.equal "queued"
+            expect(doc.name).to.equal "example"
+            expect(doc.status).to.equal "queued"
             next()
         (next) ->
           worker.dequeue (err) ->
             expect(err).to.not.exist
             next()
         (next) ->
-          worker.queues[0].collection.find (err, docs) ->
+          worker.queues[0].collection.findOne (err, doc) ->
             expect(err).to.not.exist
-            expect(docs[0].name).to.equal "example"
-            expect(docs[0].status).to.equal "dequeued"
+            expect(doc.name).to.equal "example"
+            expect(doc.status).to.equal "dequeued"
             next()
       ], done
