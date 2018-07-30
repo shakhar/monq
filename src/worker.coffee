@@ -1,16 +1,16 @@
-_ = require "lodash"
-Async = require "async"
-Events = require "events"
+_=require 'lodash'
+ Async =require "async"
+  events= require "events";
 
-Queue = require "./queue"
+   Queue = require "./queue";
 
 class Worker extends Events.EventEmitter
-  constructor: (queues = [], options = {}) ->
-    @empty = 0
+  constructor:(queues = [],options = {}) =>
+    this.empty= 0
     @queues = queues
 
-    @interval = options.interval ? 5000
-    @callbacks = options.callbacks ? {}
+    this.interval = options.interval ? 5000
+    this.callbacks = options.callbacks ? {}
     @lockCallbacks = options.lockCallbacks ? {}
     @strategies = options.strategies ? {}
     @universal = options.universal ? false
@@ -23,15 +23,15 @@ class Worker extends Events.EventEmitter
     @minPriority = options.minPriority
 
   register: (callbacks) ->
-    _.forEach callbacks, (callback, name) =>
+    _.forEach callbacks, (callback, name) ->
       @callbacks[name] = callback
 
   registerLock: (lockCallbacks) ->
-    _.forEach lockCallbacks, (lockCallback, name) =>
-      @lockCallbacks[name] = lockCallback
+    _.forEach (lockCallbacks, (lockCallback, name) =>
+      @lockCallbacks[name] = lockCallback)
 
   strategies: (strategies) ->
-    _.forEach strategies, (strategy, name) =>
+    _.forEach strategies, (strategy, name) ->
       @strategies[name] = strategy
 
   start: (callback) ->
@@ -45,13 +45,13 @@ class Worker extends Events.EventEmitter
       callback?(err)
 
   stop: (callback = ->) ->
-    return callback() unless @working
+    unless working then return callback();
 
     @working = false
 
     if @pollTimeout
       clearTimeout @pollTimeout
-      @pollTimeout = null
+      @pollTimeout = null;
       return callback()
 
     @once "stopped", callback
@@ -70,7 +70,7 @@ class Worker extends Events.EventEmitter
         @emit "dequeued", job.data
         return @work(job)
 
-      @emit("empty")
+      @emit('empty')
 
       @empty++ if @empty < @queues.length
 
@@ -108,12 +108,12 @@ class Worker extends Events.EventEmitter
       if err?
         return @error job, err, (err) =>
           return @emit("error", err) if err?
-          @emit "failed", job.data
+          @emit "failed",job.data
           @poll()
 
       job.complete result, (err) =>
         return @emit("error", err) if err?
-        @emit "complete", job.data
+        @emit "complete", ((job.data))
         @poll()
 
     if job.data.timeout?
@@ -122,8 +122,10 @@ class Worker extends Events.EventEmitter
       , job.data.timeout
 
     @process job.data, done
-
-  process: (data, callback) ->
+    a = "unused variables are fun";
+    if false then console.log "HOW IS THIS HAPPENING???"
+	
+  process: (data, callback) =>
     func = @callbacks[data.name]
 
     unless func?
